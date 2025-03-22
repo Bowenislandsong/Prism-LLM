@@ -1,0 +1,57 @@
+{
+    "input": "Explain a randomised self-stabilising algorithm for a network of processes where, despite starting in arbitrary states, the system eventually converges to a stable configuration.",
+    "output": "// PRISM model for a randomised self-stabilising algorithm\n\ndtmc\n\nconst N = 5; // number of processes\n\nmodule process\n  // state: 0 = unstable, 1 = reading, 2 = converging, 3 = stable\n  state : [0..3] init 0;\n\n  // In each step, the process attempts to move toward stability\n  [step] state < 3 -> 0.8 : (state' = state + 1) + 0.2 : (state' = state);\nendmodule\n\nrewards \"steps\"\n  [step] true : 1;\nendrewards"
+  }
+  {
+    "input": "Describe a synchronous leader election protocol for a ring of 4 processors. In each round every processor picks a random number from 0 to 7 and sends it to its neighbor. A counter (acting as a queue) tracks the number of messages processed. If a processor finds its number is not unique, it marks itself as ineligible; when all have read, the unique maximum wins.",
+    "output": "// Synchronous Leader Election Protocol (Itai & Rodeh)\n\ndtmc\n\n// CONSTANTS\nconst N = 4; // number of processors\nconst K = 8; // range for random choice (0 to 7)\n\n// Counter module: acts as a queue to track message reads\nmodule counter\n    c : [1..N-1];\n    [read] c < N-1 -> (c' = c + 1);\n    [read] c = N-1 -> (c' = c);\n    [done] u1 | u2 | u3 | u4 -> (c' = c);\n    [retry] !(u1 | u2 | u3 | u4) -> (c' = 1);\n    [loop] s1 = 3 -> (c' = c);\nendmodule\n\n// Process module for processor 1\nmodule process1\n    // s1: 0 = picking, 1 = reading, 2 = deciding, 3 = finished\n    s1 : [0..3] init 0;\n    u1 : bool init true;  // indicates uniqueness\n    v1 : [0..K-1] init 0;  // value to be passed\n    p1 : [0..K-1] init 0;  // random id\n\n    // [pick] action: randomly choose an id from 0 to 7\n    [pick] s1=0 -> 1/K : (s1' = 1) & (p1' = 0) & (v1' = 0) & (u1' = true)\n                       + 1/K : (s1' = 1) & (p1' = 1) & (v1' = 1) & (u1' = true)\n                       + 1/K : (s1' = 1) & (p1' = 2) & (v1' = 2) & (u1' = true)\n                       + 1/K : (s1' = 1) & (p1' = 3) & (v1' = 3) & (u1' = true)\n                       + 1/K : (s1' = 1) & (p1' = 4) & (v1' = 4) & (u1' = true)\n                       + 1/K : (s1' = 1) & (p1' = 5) & (v1' = 5) & (u1' = true)\n                       + 1/K : (s1' = 1) & (p1' = 6) & (v1' = 6) & (u1' = true)\n                       + 1/K : (s1' = 1) & (p1' = 7) & (v1' = 7) & (u1' = true);\n\n    // [read] actions: simulate reading the neighbor's value (v2) and checking uniqueness\n    [read] s1=1 & u1 & !(p1 = v2) & c < N-1 -> (u1' = true) & (v1' = v2);\n    [read] s1=1 & u1 & (p1 = v2) & c < N-1 -> (u1' = false) & (v1' = v2) & (p1' = 0);\n    [read] s1=1 & !u1 & c < N-1 -> (u1' = false) & (v1' = v2);\n\n    // Transition from reading to decision-making\n    [read] s1=1 & u1 & !(p1 = v2) & c = N-1 -> (s1' = 2) & (u1' = true) & (v1' = 0) & (p1' = 0);\n    [read] s1=1 & u1 & (p1 = v2) & c = N-1 -> (s1' = 2) & (u1' = false) & (v1' = 0) & (p1' = 0);\n    [read] s1=1 & !u1 & c = N-1 -> (s1' = 2) & (u1' = false) & (v1' = 0);\n\n    // [done] action: finish decision-making\n    [done] s1=2 -> (s1' = 3) & (u1' = false) & (v1' = 0) & (p1' = 0);\n    [retry] s1=2 -> (s1' = 0) & (u1' = false) & (v1' = 0) & (p1' = 0);\n    [loop] s1=3 -> (s1' = 3);\nendmodule\n\n// Create additional processes by renaming process1\nmodule process2 = process1[s1 = s2, p1 = p2, v1 = v2, u1 = u2, v2 = v3] endmodule\nmodule process3 = process1[s1 = s3, p1 = p3, v1 = v3, u1 = u3, v2 = v4] endmodule\nmodule process4 = process1[s1 = s4, p1 = p4, v1 = v4, u1 = u4, v2 = v1] endmodule\n\nrewards \"rounds\"\n    [pick] true : 1;\nendrewards"
+  }
+  {
+    "input": "Describe an asynchronous leader election protocol for 4 processors. Each processor independently picks a random id from 0 to 7 and communicates without a global clock until a leader is elected.",
+    "output": "// PRISM model for asynchronous leader election\n\ndtmc\n\nconst N = 4;\nconst K = 8;\n\nmodule process\n  state : [0..3] init 0; // 0 = choosing, 1 = communicating, 2 = deciding, 3 = finished\n  id : [0..K-1] init 0;\n  unique : bool init true;\n\n  // Random choice of id\n  [choose] state=0 -> 1/K : (state' = 1) & (id' = 0) & (unique' = true)\n                    + ... ; // Additional probabilistic branches for ids 1 to 7\n\n  // Communication phase (asynchronous, so no global synchronization)\n  [communicate] state=1 -> (state' = 2);\n  [finish] state=2 -> (state' = 3);\nendmodule\n\n// Note: In asynchronous protocols, actions occur independently for each process."
+  }
+  {
+    "input": "Explain a randomised dining philosophers scenario where philosophers alternate between thinking and eating. They pick up forks randomly to avoid deadlock. Represent this process with a DTMC in PRISM.",
+    "output": "// PRISM model for randomised dining philosophers\n\ndtmc\n\nconst N = 5; // number of philosophers\n\nmodule philosopher\n  state : [0..2] init 0; // 0 = thinking, 1 = hungry, 2 = eating\n\n  [think] state=0 -> 0.7 : (state' = 0) + 0.3 : (state' = 1);\n  [eat] state=1 -> 0.5 : (state' = 2) + 0.5 : (state' = 0);\n  [finish] state=2 -> (state' = 0);\nendmodule\n"
+  }
+  {
+    "input": "Describe a Bluetooth device discovery protocol where devices randomly broadcast discovery signals and detect nearby devices, minimizing collisions. Model this using a DTMC in PRISM.",
+    "output": "// PRISM model for Bluetooth device discovery\n\ndtmc\n\nconst N = 3; // number of devices\n\nmodule device\n  state : [0..2] init 0; // 0 = idle, 1 = broadcasting, 2 = discovered\n\n  [broadcast] state=0 -> 0.6 : (state' = 1) + 0.4 : (state' = 0);\n  [discover] state=1 -> 0.5 : (state' = 2) + 0.5 : (state' = 1);\nendmodule\n"
+  }
+  {
+    "input": "Outline the Crowds protocol for anonymous communication. In this protocol, a message is randomly forwarded among a group of users before reaching its destination, preserving anonymity.",
+    "output": "// PRISM model for the Crowds protocol (simplified version)\n\ndtmc\n\nconst N = 10; // number of users\nconst p_forward = 0.5;\n\nmodule user\n  state : [0..2] init 0; // 0 = holding message, 1 = forwarding, 2 = delivered\n\n  [forward] state=0 -> p_forward : (state' = 1) + (1 - p_forward) : (state' = 2);\nendmodule\n"
+  }
+  {
+    "input": "Explain a cell cycle control mechanism in eukaryotes. The model should depict the progression of a cell through phases (G1, S, G2, M) with probabilistic transitions.",
+    "output": "// PRISM model for cell cycle control in eukaryotes\n\ndtmc\n\nmodule cell_cycle\n  phase : [0..3] init 0; // 0 = G1, 1 = S, 2 = G2, 3 = M\n\n  [progress] phase < 3 -> 0.8 : (phase' = phase + 1) + 0.2 : (phase' = phase);\n  [reset] phase = 3 -> (phase' = 0);\nendmodule\n"
+  }
+  {
+    "input": "Describe the MAPK cascade signalling pathway where a cell responds to external signals through sequential activation and deactivation steps. Model the pathway with probabilistic transitions between inactive, active, propagating, and deactivated states.",
+    "output": "// PRISM model for the MAPK cascade\n\ndtmc\n\nmodule MAPK\n  state : [0..3] init 0; // 0 = inactive, 1 = activated, 2 = propagating, 3 = deactivated\n\n  [activate] state=0 -> 0.7 : (state' = 1) + 0.3 : (state' = 0);\n  [propagate] state=1 -> (state' = 2);\n  [deactivate] state=2 -> (state' = 3);\n  [reset] state=3 -> (state' = 0);\nendmodule\n"
+  }
+  {
+    "input": "Describe a task graph scheduling problem where tasks with dependencies are assigned to processors. Model the progression of task execution as a DTMC.",
+    "output": "// PRISM model for task graph scheduling (simplified)\n\ndtmc\n\nconst TASKS = 5;\n\nmodule scheduler\n  task : [0..TASKS] init 0; // current task index\n\n  [schedule] task < TASKS -> 0.8 : (task' = task + 1) + 0.2 : (task' = task);\nendmodule\n\nrewards \"time\"\n  [schedule] true : 1;\nendrewards\n"
+  }
+  {
+    "input": "Explain a stable matching problem where agents are paired based on preferences. Use a DTMC model in PRISM to simulate the process of proposing and matching.",
+    "output": "// PRISM model for stable matchings (simplified)\n\ndtmc\n\nconst N = 4; // number of agents\n\nmodule matching\n  state : [0..2] init 0; // 0 = unmatched, 1 = proposing, 2 = matched\n\n  [propose] state=0 -> 0.6 : (state' = 1) + 0.4 : (state' = 0);\n  [match] state=1 -> 0.7 : (state' = 2) + 0.3 : (state' = 1);\nendmodule\n"
+  }
+  {
+    "input": "Describe an embedded control system where a controller monitors a physical process and changes system modes. Model the system with states for normal operation, warning, and critical conditions.",
+    "output": "// PRISM model for an embedded control system\n\ndtmc\n\nmodule control_system\n  mode : [0..2] init 0; // 0 = normal, 1 = warning, 2 = critical\n\n  [monitor] mode=0 -> 0.9 : (mode' = 0) + 0.1 : (mode' = 1);\n  [monitor] mode=1 -> 0.8 : (mode' = 0) + 0.2 : (mode' = 2);\n  [recover] mode=2 -> (mode' = 0);\nendmodule\n"
+  }
+  {
+    "input": "Explain a real-time dynamic voltage scaling system where the system adjusts its voltage based on workload. Create a PRISM DTMC model representing transitions among low, medium, and high voltage levels.",
+    "output": "// PRISM model for real-time dynamic voltage scaling\n\ndtmc\n\nmodule voltage_scaling\n  level : [0..2] init 1; // 0 = low, 1 = medium, 2 = high\n\n  [adjust] level=1 -> 0.5 : (level' = 0) + 0.5 : (level' = 2);\n  [adjust] level=0 -> (level' = 1);\n  [adjust] level=2 -> (level' = 1);\nendmodule\n"
+  }
+  {
+    "input": "Describe a Kanban system in a manufacturing setting where work items move through production stages. Model the production and consumption of items as a DTMC in PRISM.",
+    "output": "// PRISM model for a Kanban system\n\ndtmc\n\nconst MAX_ITEMS = 10;\n\nmodule kanban\n  items : [0..MAX_ITEMS] init 0;\n\n  [produce] items < MAX_ITEMS -> (items' = items + 1);\n  [consume] items > 0 -> (items' = items - 1);\nendmodule\n"
+  }
+  {
+    "input": "Explain the Ising model for ferromagnetism where spins on a lattice can be up or down and flip probabilistically. Provide a simplified DTMC model using PRISM.",
+    "output": "// Simplified PRISM model for the Ising model\n\ndtmc\n\nmodule ising\n  spin : [0..1] init 0; // 0 = down, 1 = up\n\n  [flip] true -> 0.5 : (spin' = 1-spin);\nendmodule\n"
+  }
+  
